@@ -324,7 +324,9 @@ where
             term.flush()?;
 
             loop {
-                match term.read_key()? {
+                let key = term.read_key()?;
+                println!("Key pressed: {:?}", key);
+                match key {
                     Key::Backspace if position > 0 => {
                         position -= 1;
                         chars.remove(position);
