@@ -1,4 +1,4 @@
-use std::collections::VecDeque;
+use crate::prompts::input::HistoryContainer;
 
 /// Trait for history handling.
 pub trait History {
@@ -16,12 +16,18 @@ pub trait History {
     fn write(&mut self, val: String);
 }
 
-impl History for VecDeque<String> {
+impl History for HistoryContainer<'_> {
     fn read(&self, pos: usize) -> Option<String> {
-        self.get(pos).cloned()
+        match self {
+            HistoryContainer::Referenced(h) => h.read(pos),
+            HistoryContainer::Infinite(vd) => vd.get(pos).cloned(),
+        }
     }
 
     fn write(&mut self, val: String) {
-        self.push_front(val)
+        match self {
+            HistoryContainer::Referenced(h) => h.write(val),
+            HistoryContainer::Infinite(vd) => vd.push_front(val),
+        }
     }
 }

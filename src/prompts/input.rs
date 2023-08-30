@@ -1,4 +1,4 @@
-use std::{cmp::Ordering, fmt::Debug, io, iter, str::FromStr};
+use std::{cmp::Ordering, collections::VecDeque, fmt::Debug, io, iter, str::FromStr};
 
 use console::{Key, Term};
 
@@ -11,6 +11,16 @@ use crate::{
     validate::Validator,
     Result,
 };
+
+/// This container exists for distinguishing between first API "referenced" type
+/// and "owned" variant(s).
+#[cfg(feature = "history")]
+pub(crate) enum HistoryContainer<'a> {
+    /// Constructed via `history_with()`
+    Referenced(&'a mut dyn History),
+    /// Constructed via `history_infinite()`
+    Infinite(VecDeque<String>),
+}
 
 type ValidatorCallback<'a, T> = Box<dyn FnMut(&T) -> Option<String> + 'a>;
 
@@ -56,7 +66,7 @@ pub struct Input<'a, T> {
     permit_empty: bool,
     validator: Option<ValidatorCallback<'a, T>>,
     #[cfg(feature = "history")]
-    history: Option<&'a mut dyn History>,
+    history: Option<HistoryContainer<'a>>,
     #[cfg(feature = "completion")]
     completion: Option<&'a dyn Completion>,
 }
@@ -203,15 +213,14 @@ impl<'a, T> Input<'a, T> {
     /// }
     /// ```
     #[cfg(feature = "history")]
-    pub fn history_with(mut self, history: &'a mut impl History) -> Self
-    {
-        self.history = Some(history);
+    pub fn history_with(mut self, history: &'a mut impl History) -> Self {
+        self.history = Some(HistoryContainer::Referenced(history));
         self
     }
 
     #[cfg(feature = "history")]
     pub fn history_infinite(mut self) -> Self {
-        self.history = Some(&mut std::collections::VecDeque::new());
+        self.history = Some(HistoryContainer::Infinite(VecDeque::new()));
         self
     }
 
