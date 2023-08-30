@@ -7,12 +7,10 @@ fn main() {
     println!("Use the Up/Down arrows to scroll through history");
     println!();
 
-    let mut history = MyHistory::default();
-
     loop {
         if let Ok(cmd) = Input::<String>::with_theme(&ColorfulTheme::default())
             .with_prompt("dialoguer")
-            .history_with(&mut history)
+            .history_with(&mut std::collections::VecDeque::new())
             .interact_text()
         {
             if cmd == "exit" {

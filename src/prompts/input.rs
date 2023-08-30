@@ -56,7 +56,7 @@ pub struct Input<'a, T> {
     permit_empty: bool,
     validator: Option<ValidatorCallback<'a, T>>,
     #[cfg(feature = "history")]
-    history: Option<&'a mut dyn History<T>>,
+    history: Option<&'a mut dyn History>,
     #[cfg(feature = "completion")]
     completion: Option<&'a dyn Completion>,
 }
@@ -203,11 +203,15 @@ impl<'a, T> Input<'a, T> {
     /// }
     /// ```
     #[cfg(feature = "history")]
-    pub fn history_with<H>(mut self, history: &'a mut H) -> Self
-    where
-        H: History<T>,
+    pub fn history_with(mut self, history: &'a mut impl History) -> Self
     {
         self.history = Some(history);
+        self
+    }
+
+    #[cfg(feature = "history")]
+    pub fn history_infinite(mut self) -> Self {
+        self.history = Some(&mut std::collections::VecDeque::new());
         self
     }
 
@@ -594,7 +598,7 @@ where
                 Ok(value) => {
                     #[cfg(feature = "history")]
                     if let Some(history) = &mut self.history {
-                        history.write(&value);
+                        history.write(value.to_string());
                     }
 
                     if let Some(ref mut validator) = self.validator {

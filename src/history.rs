@@ -1,5 +1,7 @@
+use std::collections::VecDeque;
+
 /// Trait for history handling.
-pub trait History<T> {
+pub trait History {
     /// This is called with the current position that should
     /// be read from history. The `pos` represents the number
     /// of times the `Up`/`Down` arrow key has been pressed.
@@ -11,5 +13,15 @@ pub trait History<T> {
     /// This is called with the next value you should store
     /// in history at the first location. Normally history
     /// is implemented as a FIFO queue.
-    fn write(&mut self, val: &T);
+    fn write(&mut self, val: String);
+}
+
+impl History for VecDeque<String> {
+    fn read(&self, pos: usize) -> Option<String> {
+        self.get(pos).cloned()
+    }
+
+    fn write(&mut self, val: String) {
+        self.push_front(val)
+    }
 }
