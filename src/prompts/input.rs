@@ -191,15 +191,15 @@ impl<'a, T> Input<'a, T> {
     ///     }
     /// }
     ///
-    /// impl<T: ToString> History<T> for MyHistory {
+    /// impl History for MyHistory {
     ///     fn read(&self, pos: usize) -> Option<String> {
     ///         self.history.get(pos).cloned()
     ///     }
     ///
-    ///     fn write(&mut self, val: &T)
+    ///     fn write(&mut self, val: String)
     ///     where
     ///     {
-    ///         self.history.push_front(val.to_string());
+    ///         self.history.push_front(val);
     ///     }
     /// }
     ///
