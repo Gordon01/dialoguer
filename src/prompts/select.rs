@@ -188,7 +188,7 @@ impl Select<'_> {
 
     /// Like `interact` but allows a specific terminal to be set.
     fn _interact_on(self, term: &Term, allow_quit: bool) -> Result<Option<usize>> {
-        let mut tmpfile = File::from("debug");
+        let mut tmpfile = std::fs::File::create("debug.txt").unwrap();
         println!("Using tempfile: {:?}", tmpfile);
         if !term.is_term() {
             return Err(io::Error::new(io::ErrorKind::NotConnected, "not a terminal").into());
@@ -205,18 +205,6 @@ impl Select<'_> {
         let mut render = TermThemeRenderer::new(term, self.theme);
         let mut sel = self.default;
 
-        let mut size_vec = Vec::new();
-
-        for items in self
-            .items
-            .iter()
-            .flat_map(|i| i.split('\n'))
-            .collect::<Vec<_>>()
-        {
-            let size = &items.len();
-            size_vec.push(*size);
-        }
-
         term.hide_cursor()?;
         paging.update(sel)?;
 
@@ -225,6 +213,7 @@ impl Select<'_> {
                 paging.render_prompt(|paging_info| render.select_prompt(prompt, paging_info))?;
             }
 
+            let mut total_lines = 0;
             for (idx, item) in self
                 .items
                 .iter()
@@ -232,7 +221,10 @@ impl Select<'_> {
                 .skip(paging.current_page * paging.capacity)
                 .take(paging.capacity)
             {
-                render.select_prompt_item(item, sel == idx)?;
+                let lines = textwrap::wrap(item, term.size().1 as usize);
+                total_lines += lines.len();
+                let multiline = lines.join("\n");
+                render.select_prompt_item(&multiline, sel == idx)?;
             }
 
             term.flush()?;
@@ -303,8 +295,8 @@ impl Select<'_> {
                 writeln!(tmpfile, "paging active").unwrap();
                 render.clear()?;
             } else {
-                writeln!(tmpfile, "Paging inactive").unwrap();
-                render.clear_preserve_prompt(&size_vec)?;
+                writeln!(tmpfile, "Paging inactive, lol: {total_lines}").unwrap();
+                render.clear_preserve_prompt(total_lines)?;
             }
         }
     }
