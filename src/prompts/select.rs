@@ -1,4 +1,7 @@
-use std::{io, ops::Rem};
+use std::{
+    io::{self, Write},
+    ops::Rem,
+};
 
 use console::{Key, Term};
 
@@ -185,6 +188,8 @@ impl Select<'_> {
 
     /// Like `interact` but allows a specific terminal to be set.
     fn _interact_on(self, term: &Term, allow_quit: bool) -> Result<Option<usize>> {
+        let mut tmpfile = File::from("debug");
+        println!("Using tempfile: {:?}", tmpfile);
         if !term.is_term() {
             return Err(io::Error::new(io::ErrorKind::NotConnected, "not a terminal").into());
         }
@@ -295,8 +300,10 @@ impl Select<'_> {
             paging.update(sel)?;
 
             if paging.active {
+                writeln!(tmpfile, "paging active").unwrap();
                 render.clear()?;
             } else {
+                writeln!(tmpfile, "Paging inactive").unwrap();
                 render.clear_preserve_prompt(&size_vec)?;
             }
         }
