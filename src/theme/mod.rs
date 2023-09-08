@@ -253,20 +253,11 @@ pub trait Theme {
         f: &mut dyn fmt::Write,
         prompt: &str,
         search_term: &str,
-        cursor_pos: usize,
     ) -> fmt::Result {
         if !prompt.is_empty() {
             write!(f, "{} ", prompt)?;
         }
 
-        if cursor_pos < search_term.len() {
-            let st_head = search_term[0..cursor_pos].to_string();
-            let st_tail = search_term[cursor_pos..search_term.len()].to_string();
-            let st_cursor = "|".to_string();
-            write!(f, "{}{}{}", st_head, st_cursor, st_tail)
-        } else {
-            let cursor = "|".to_string();
-            write!(f, "{}{}", search_term, cursor)
-        }
+        write!(f, "{}", search_term)
     }
 }

@@ -102,11 +102,10 @@ impl<'a> TermThemeRenderer<'a> {
         &mut self,
         prompt: &str,
         search_term: &str,
-        cursor_pos: usize,
     ) -> Result {
         self.write_formatted_prompt(|this, buf| {
             this.theme
-                .format_fuzzy_select_prompt(buf, prompt, search_term, cursor_pos)
+                .format_fuzzy_select_prompt(buf, prompt, search_term)
         })
     }
 

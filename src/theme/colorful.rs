@@ -44,9 +44,6 @@ pub struct ColorfulTheme {
     pub picked_item_prefix: StyledObject<String>,
     /// Unpicked item in sort prefix value and style
     pub unpicked_item_prefix: StyledObject<String>,
-    /// Formats the cursor for a fuzzy select prompt
-    #[cfg(feature = "fuzzy-select")]
-    pub fuzzy_cursor_style: Style,
     // Formats the highlighting if matched characters
     #[cfg(feature = "fuzzy-select")]
     pub fuzzy_match_highlight_style: Style,
@@ -73,8 +70,6 @@ impl Default for ColorfulTheme {
             unchecked_item_prefix: style("⬚".to_string()).for_stderr().magenta(),
             picked_item_prefix: style("❯".to_string()).for_stderr().green(),
             unpicked_item_prefix: style(" ".to_string()).for_stderr(),
-            #[cfg(feature = "fuzzy-select")]
-            fuzzy_cursor_style: Style::new().for_stderr().black().on_white(),
             #[cfg(feature = "fuzzy-select")]
             fuzzy_match_highlight_style: Style::new().for_stderr().bold(),
         }
@@ -403,31 +398,16 @@ impl Theme for ColorfulTheme {
         f: &mut dyn fmt::Write,
         prompt: &str,
         search_term: &str,
-        cursor_pos: usize,
     ) -> fmt::Result {
         if !prompt.is_empty() {
             write!(
                 f,
                 "{} {} ",
                 &self.prompt_prefix,
-                self.prompt_style.apply_to(prompt)
+                self.prompt_style.apply_to(prompt),
             )?;
         }
 
-        if cursor_pos < search_term.len() {
-            let st_head = search_term[0..cursor_pos].to_string();
-            let st_tail = search_term[cursor_pos + 1..search_term.len()].to_string();
-            let st_cursor = self
-                .fuzzy_cursor_style
-                .apply_to(search_term.to_string().chars().nth(cursor_pos).unwrap());
-            write!(
-                f,
-                "{} {}{}{}",
-                &self.prompt_suffix, st_head, st_cursor, st_tail
-            )
-        } else {
-            let cursor = self.fuzzy_cursor_style.apply_to(" ");
-            write!(f, "{} {}{}", &self.prompt_suffix, search_term, cursor)
-        }
+        write!(f, "{} {}", self.prompt_suffix, search_term)
     }
 }

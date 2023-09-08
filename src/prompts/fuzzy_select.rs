@@ -195,7 +195,7 @@ impl FuzzySelect<'_> {
 
     fn _interact_on(self, term: &Term, allow_quit: bool) -> Result<Option<usize>> {
         // Place cursor at the end of the search term
-        let mut position = self.initial_text.len();
+        let mut position = self.initial_text.chars().count();
         let mut search_term = self.initial_text.to_owned();
 
         let mut render = TermThemeRenderer::new(term, self.theme);
@@ -219,13 +219,13 @@ impl FuzzySelect<'_> {
         // Variable used to determine if we need to scroll through the list.
         let mut starting_row = 0;
 
-        term.hide_cursor()?;
+        //term.hide_cursor()?;
 
         let mut vim_mode = false;
 
         loop {
             render.clear()?;
-            render.fuzzy_select_prompt(self.prompt.as_str(), &search_term, position)?;
+            render.fuzzy_select_prompt(self.prompt.as_str(), &search_term)?;
 
             // Maps all items to a tuple of item and its match score.
             let mut filtered_list = self
@@ -253,6 +253,8 @@ impl FuzzySelect<'_> {
                 )?;
             }
             term.flush()?;
+            // TODO: make adjustments for multi-line items
+            term.move_cursor_up(filtered_list.len())?;
 
             match (term.read_key()?, sel, vim_mode) {
                 (Key::Escape, _, false) if self.enable_vim_mode => {
@@ -305,12 +307,14 @@ impl FuzzySelect<'_> {
                     term.flush()?;
                 }
                 (Key::ArrowLeft, _, _) | (Key::Char('h'), _, true) if position > 0 => {
+                    term.move_cursor_left(1)?;
                     position -= 1;
                     term.flush()?;
                 }
                 (Key::ArrowRight, _, _) | (Key::Char('l'), _, true)
                     if position < search_term.len() =>
                 {
+                    term.move_cursor_right(1)?;
                     position += 1;
                     term.flush()?;
                 }
