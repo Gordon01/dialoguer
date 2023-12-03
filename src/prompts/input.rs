@@ -303,7 +303,7 @@ where
         loop {
             let default_string = self.default.as_ref().map(ToString::to_string);
 
-            let prompt_len = render.input_prompt(
+            let prompt = render.input_prompt(
                 &self.prompt,
                 if self.show_default {
                     default_string.as_deref()
@@ -312,78 +312,96 @@ where
                 },
             )?;
 
-            let mut chars: Vec<char> = Vec::new();
-            let mut position = 0;
+            let mut editable = EditString::with_prompt(prompt);
             #[cfg(feature = "history")]
             let mut hist_pos = 0;
 
             if let Some(initial) = self.initial_text.as_ref() {
                 term.write_str(initial)?;
-                chars = initial.chars().collect();
-                position = chars.len();
+                editable.replace(initial);
             }
             term.flush()?;
 
             loop {
+                let line_size = term.size().1;
+                editable.update_size(term.size());
                 match term.read_key()? {
-                    Key::Backspace if position > 0 => {
-                        position -= 1;
-                        chars.remove(position);
-                        let line_size = term.size().1 as usize;
+                    Key::Backspace if !editable.at_start() => {
+                        editable.remove();
                         // Case we want to delete last char of a line so the cursor is at the beginning of the next line
-                        if (position + prompt_len) % (line_size - 1) == 0 {
+                        if editable.at_bol() {
                             term.clear_line()?;
                             term.move_cursor_up(1)?;
-                            term.move_cursor_right(line_size + 1)?;
+                            term.move_cursor_right(line_size as usize + 1)?;
                         } else {
                             term.clear_chars(1)?;
                         }
 
-                        let tail: String = chars[position..].iter().collect();
-
-                        if !tail.is_empty() {
+                        if let Some(tail) = editable.tail() {
                             term.write_str(&tail)?;
 
-                            let total = position + prompt_len + tail.chars().count();
-                            let total_line = total / line_size;
-                            let line_cursor = (position + prompt_len) / line_size;
-                            term.move_cursor_up(total_line - line_cursor)?;
+                            // TODO
+                            // let line_cursor = (position + prompt_len) / line_size;
+                            // term.move_cursor_up(editable.lines() - line_cursor)?;
 
-                            term.move_cursor_left(line_size)?;
-                            term.move_cursor_right((position + prompt_len) % line_size)?;
+                            // term.move_cursor_left(line_size)?;
+                            // term.move_cursor_right((position + prompt_len) % line_size)?;
                         }
 
                         term.flush()?;
                     }
                     Key::Char(chr) if !chr.is_ascii_control() => {
-                        chars.insert(position, chr);
-                        position += 1;
-                        let tail: String =
-                            iter::once(&chr).chain(chars[position..].iter()).collect();
-                        term.write_str(&tail)?;
-                        term.move_cursor_left(tail.chars().count() - 1)?;
+                        if chr == 'd' {
+                            dbg!(&editable);
+                        }
+                        let _ = editable.insert(chr);
+
+                        // Move cursor to the end of the prompt
+                        term.move_cursor_to(
+                            editable.prompt_len,
+                            editable.term_size.1 - editable.lines() - 1,
+                        )?;
+
+                        // This takes care of line ends automatically
+                        term.write_str(&editable.to_string())?;
+
+                        // TODO: Move cursor back to `.position` ?
+
+                        /*
+                        let tail_len = tail.chars().count() as isize;
+
+                        if editable.position_of(tail_len) < editable.position() {
+                            let this_line: String = tail.chars().take(1).collect();
+                            term.write_line(&this_line)?;
+                            term.write_str("lalka")?;
+                        } else {
+                            term.write_str(&tail)?;
+                            term.move_cursor_left(tail.chars().count() - 1)?;
+                        }
+                        */
                         term.flush()?;
                     }
-                    Key::ArrowLeft if position > 0 => {
-                        if (position + prompt_len) % term.size().1 as usize == 0 {
+                    Key::ArrowLeft if !editable.at_start() => {
+                        if editable.at_eol() {
                             term.move_cursor_up(1)?;
                             term.move_cursor_right(term.size().1 as usize)?;
                         } else {
                             term.move_cursor_left(1)?;
                         }
-                        position -= 1;
+                        editable.left();
                         term.flush()?;
                     }
-                    Key::ArrowRight if position < chars.len() => {
-                        if (position + prompt_len) % (term.size().1 as usize - 1) == 0 {
+                    Key::ArrowRight if !editable.at_end() => {
+                        if editable.at_bol() {
                             term.move_cursor_down(1)?;
                             term.move_cursor_left(term.size().1 as usize)?;
                         } else {
                             term.move_cursor_right(1)?;
                         }
-                        position += 1;
+                        editable.right();
                         term.flush()?;
                     }
+                    /*
                     Key::UnknownEscSeq(seq) if seq == vec!['b'] => {
                         let line_size = term.size().1 as usize;
                         let nb_space = chars[..position]
@@ -471,30 +489,26 @@ where
 
                         term.flush()?;
                     }
+                    */
                     #[cfg(feature = "completion")]
                     Key::ArrowRight | Key::Tab => {
                         if let Some(completion) = &self.completion {
-                            let input: String = chars.clone().into_iter().collect();
-                            if let Some(x) = completion.get(&input) {
-                                term.clear_chars(chars.len())?;
-                                chars.clear();
-                                position = 0;
-                                for ch in x.chars() {
-                                    chars.insert(position, ch);
-                                    position += 1;
-                                }
+                            if let Some(x) = completion.get(&editable.to_string()) {
+                                term.clear_chars(editable.len())?;
+                                editable.replace(&x);
                                 term.write_str(&x)?;
                                 term.flush()?;
                             }
                         }
                     }
+                    /*
                     #[cfg(feature = "history")]
                     Key::ArrowUp => {
                         let line_size = term.size().1 as usize;
                         if let Some(history) = &self.history {
                             if let Some(previous) = history.lock().unwrap().read(hist_pos) {
                                 hist_pos += 1;
-                                let mut chars_len = chars.len();
+                                let mut chars_len = editable.len();
                                 while ((prompt_len + chars_len) / line_size) > 0 {
                                     term.clear_chars(chars_len)?;
                                     if (prompt_len + chars_len) % line_size == 0 {
@@ -511,12 +525,7 @@ where
                                     }
                                 }
                                 term.clear_chars(chars_len)?;
-                                chars.clear();
-                                position = 0;
-                                for ch in previous.chars() {
-                                    chars.insert(position, ch);
-                                    position += 1;
-                                }
+                                editable.replace(&previous);
                                 term.write_str(&previous)?;
                                 term.flush()?;
                             }
@@ -526,7 +535,7 @@ where
                     Key::ArrowDown => {
                         let line_size = term.size().1 as usize;
                         if let Some(history) = &self.history {
-                            let mut chars_len = chars.len();
+                            let mut chars_len = editable.len();
                             while ((prompt_len + chars_len) / line_size) > 0 {
                                 term.clear_chars(chars_len)?;
                                 if (prompt_len + chars_len) % line_size == 0 {
@@ -543,8 +552,7 @@ where
                                 }
                             }
                             term.clear_chars(chars_len)?;
-                            chars.clear();
-                            position = 0;
+                            editable.replace("");
                             // Move the history position back one in case we have up arrowed into it
                             // and the position is sitting on the next to read
                             if let Some(pos) = hist_pos.checked_sub(1) {
@@ -552,10 +560,7 @@ where
                                 // Move it back again to get the previous history entry
                                 if let Some(pos) = pos.checked_sub(1) {
                                     if let Some(previous) = history.lock().unwrap().read(pos) {
-                                        for ch in previous.chars() {
-                                            chars.insert(position, ch);
-                                            position += 1;
-                                        }
+                                        editable.replace(&previous);
                                         term.write_str(&previous)?;
                                     }
                                 }
@@ -563,16 +568,16 @@ where
                             term.flush()?;
                         }
                     }
+                     */
                     Key::Enter => break,
                     _ => (),
                 }
             }
-            let input = chars.iter().collect::<String>();
 
             term.clear_line()?;
             render.clear()?;
 
-            if chars.is_empty() {
+            if editable.len() == 0 {
                 if let Some(ref default) = self.default {
                     if let Some(ref mut validator) = self.validator {
                         if let Some(err) = validator.lock().unwrap()(default) {
@@ -591,6 +596,7 @@ where
                 }
             }
 
+            let input = editable.to_string();
             match input.parse::<T>() {
                 Ok(value) => {
                     #[cfg(feature = "history")]
@@ -708,6 +714,162 @@ where
                 }
             }
         }
+    }
+}
+
+#[derive(Default, Debug)]
+struct EditString {
+    chars: Vec<char>,
+    /// Cursor position
+    position: usize,
+    term_size: (usize, usize),
+    prompt_len: usize,
+}
+
+impl EditString {
+    fn with_prompt(prompt_len: usize) -> Self {
+        Self {
+            prompt_len,
+            ..Default::default()
+        }
+    }
+
+    fn update_size(&mut self, new_width: (u16, u16)) {
+        self.term_size = (new_width.0 as usize, new_width.1 as usize);
+    }
+
+    fn replace(&mut self, new_chars: &str) {
+        self.chars = new_chars.chars().collect();
+        self.position = self.chars.len();
+    }
+
+    fn tail(&self) -> Option<String> {
+        let tail: String = self.chars[self.position..].iter().collect();
+        if tail.is_empty() {
+            None
+        } else {
+            Some(tail)
+        }
+    }
+
+    fn at_start(&self) -> bool {
+        self.position == 0
+    }
+
+    fn at_end(&self) -> bool {
+        self.position == self.chars.len()
+    }
+
+    fn at_eol(&self) -> bool {
+        self.position_of(0) == 0
+    }
+
+    fn at_bol(&self) -> bool {
+        self.position_of(1) == 0
+    }
+
+    fn len(&self) -> usize {
+        self.chars.len()
+    }
+
+    fn total_len(&self) -> usize {
+        self.len() + self.prompt_len
+    }
+
+    fn lines(&self) -> usize {
+        if self.term_size.1 == 0 {
+            return 1;
+        }
+        (self.total_len() / self.term_size.1) + 1
+    }
+
+    fn position(&self) -> usize {
+        self.position_of(0)
+    }
+
+    /// Find the position of cursor in the current line
+    fn position_of(&self, delta: isize) -> usize {
+        if self.term_size.1 == 0 {
+            return self.position;
+        }
+        (((self.position + self.prompt_len) as isize + delta) % self.term_size.1 as isize) as usize
+    }
+
+    fn remove(&mut self) -> Option<char> {
+        self.position -= 1;
+        let char = self.chars.remove(self.position);
+        Some(char)
+    }
+
+    // Returned tail is separated by lines based on current terminal width
+    fn insert(&mut self, chr: char) -> Vec<String> {
+        self.chars.insert(self.position, chr);
+        self.position += 1;
+
+        if self.term_size.1 == 0 {
+            return vec![self.chars[self.position - 1..].iter().collect()];
+        }
+
+        // Initial cursor position in the current line
+        let start = self.position();
+        let mut lines = vec![];
+        let mut line = String::with_capacity(self.term_size.1);
+        for (i, chr) in self.chars[self.position - 1..].iter().enumerate() {
+            line.push(*chr);
+            if ((i + start) % (self.term_size.1 - 1)) == 0 {
+                lines.push(line);
+                line = String::new();
+            }
+        }
+        if !line.is_empty() {
+            lines.push(line);
+        }
+
+        lines
+    }
+
+    fn left(&mut self) {
+        self.position -= 1;
+    }
+
+    fn right(&mut self) {
+        self.position += 1;
+    }
+}
+
+impl ToString for EditString {
+    fn to_string(&self) -> String {
+        self.chars.iter().collect()
+    }
+}
+
+mod test_es {
+    use super::EditString;
+
+    #[test]
+    fn basic_cursor() {
+        let mut editable = EditString::default();
+        assert_eq!(0, editable.len());
+        assert_eq!(1, editable.lines());
+        assert_eq!(0, editable.position());
+        assert!(editable.at_start());
+        assert!(editable.at_end());
+
+        editable.insert('a');
+        assert_eq!(1, editable.len());
+        assert_eq!(1, editable.position());
+        assert!(!editable.at_start());
+        assert!(editable.at_end());
+    }
+
+    #[test]
+    fn tails() {
+        let mut editable = EditString::default();
+        editable.update_size((5, 5));
+        editable.replace("12345");
+        editable.left();
+        assert_eq!(vec!["a", "5"], editable.insert('a'));
+        assert_eq!(vec!["b5"], editable.insert('b'));
     }
 }
 
