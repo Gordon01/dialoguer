@@ -338,7 +338,7 @@ impl MultiSelect<'_> {
             if paging.active {
                 render.clear()?;
             } else {
-                render.clear_preserve_prompt(&size_vec)?;
+                render.clear_preserve_prompt(0)?;
             }
         }
     }

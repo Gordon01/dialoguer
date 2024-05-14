@@ -2,7 +2,7 @@ use dialoguer::{theme::ColorfulTheme, Select};
 
 fn main() {
     let selections = &[
-        "Ice Cream",
+        "I love long lines : Ice Cream. LONG LONG khe- chai- 1 22 333 4444",
         "Vanilla Cupcake",
         "Chocolate Muffin",
         "A Pile of sweet, sweet mustard",
